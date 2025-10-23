@@ -12,6 +12,7 @@
     #include "ScTrackSegment.h"
 
     #include "../../../Context.h"
+    #include "../../../ride/RideData.h"
     #include "../../../ride/TrackData.h"
     #include "../../../ride/Vehicle.h"
     #include "../../ScriptEngine.h"
@@ -68,6 +69,7 @@ void ScTrackSegment::Register(duk_context* ctx)
 
     dukglue_register_method(ctx, &ScTrackSegment::getSubpositionLength, "getSubpositionLength");
     dukglue_register_method(ctx, &ScTrackSegment::getSubpositions, "getSubpositions");
+    dukglue_register_method(ctx, &ScTrackSegment::getValidNextSegments, "getValidNextSegments");
 }
 
 int32_t ScTrackSegment::type_get() const
@@ -296,6 +298,61 @@ std::string ScTrackSegment::getTrackPitchDirection() const
     if (ted.flags & TRACK_ELEM_FLAG_DOWN)
         return "down";
     return "flat";
+}
+
+std::vector<DukValue> ScTrackSegment::getValidNextSegments(int32_t rideType) const
+{
+    auto& scriptEngine = GetContext()->GetScriptEngine();
+    auto ctx = scriptEngine.GetContext();
+
+    const auto& currentTed = GetTrackElementDescriptor(_type);
+    const auto endSlope = currentTed.definition.pitchEnd;
+    const auto endBank = currentTed.definition.rollEnd;
+    const bool endIsDiagonal = TrackPieceDirectionIsDiagonal(currentTed.coordinates.rotationEnd);
+
+    std::vector<DukValue> result;
+
+    // Get the ride type descriptor to check which track groups are enabled
+    const auto& rtd = GetRideTypeDescriptor(static_cast<ride_type_t>(rideType));
+    const auto& trackDrawer = rtd.TrackPaintFunctions;
+
+    // Get available track groups for this ride type
+    RideTrackGroups enabledGroups;
+    trackDrawer.Regular.GetAvailableTrackGroups(enabledGroups);
+
+    // Iterate through all track element types
+    for (int32_t i = 0; i < EnumValue(TrackElemType::Count); i++)
+    {
+        const auto candidateType = static_cast<TrackElemType>(i);
+        const auto& candidateTed = GetTrackElementDescriptor(candidateType);
+
+        // Skip if this is not a valid track element
+        if (candidateTed.description == kStringIdNone)
+            continue;
+
+        // Check if the track group is enabled for this ride type
+        if (!enabledGroups.get(EnumValue(candidateTed.definition.group)))
+            continue;
+
+        // Check if the candidate's start matches the current segment's end
+        const bool candidateStartIsDiagonal = TrackPieceDirectionIsDiagonal(candidateTed.coordinates.rotationBegin);
+
+        if (candidateTed.definition.pitchStart == endSlope &&
+            candidateTed.definition.rollStart == endBank &&
+            candidateStartIsDiagonal == endIsDiagonal)
+        {
+            // This track segment is a valid next segment
+            duk_push_object(ctx);
+            ScTrackSegment candidateSegment(candidateType);
+
+            // Push the ScTrackSegment object
+            dukglue_push(ctx, candidateSegment);
+            result.push_back(DukValue::copy_from_stack(ctx));
+            duk_pop(ctx);
+        }
+    }
+
+    return result;
 }
 
 #endif

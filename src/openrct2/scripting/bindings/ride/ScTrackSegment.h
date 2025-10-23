@@ -69,6 +69,7 @@ namespace OpenRCT2::Scripting
         bool getTrackFlag() const;
         std::string getTrackCurvature() const;
         std::string getTrackPitchDirection() const;
+        std::vector<DukValue> getValidNextSegments(int32_t rideType) const;
     };
 
 } // namespace OpenRCT2::Scripting

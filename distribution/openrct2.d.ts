@@ -2723,6 +2723,15 @@ declare global {
          * pathing of vehicles when moving along the track.
          */
         getSubpositions(subpositionType: number, direction: Direction): TrackSubposition[];
+
+        /**
+         * Gets all valid track segments that can connect after this one for the specified ride type.
+         * The returned segments will have geometric compatibility (matching slope and banking) and
+         * will be enabled for the specified ride type.
+         * @param rideType The ride type ID to check compatibility for.
+         * @returns Array of valid next track segments.
+         */
+        getValidNextSegments(rideType: number): TrackSegment[];
     }
 
     enum TrackSlope {
